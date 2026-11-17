@@ -2,12 +2,18 @@ package br.fitforge.gateway.security;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.regex.Pattern;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.authentication.UserDetailsRepositoryReactiveAuthenticationManager;
 import org.springframework.security.config.Customizer;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import reactor.core.publisher.Mono;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.core.userdetails.MapReactiveUserDetailsService;
 import org.springframework.security.core.userdetails.User;
@@ -23,6 +29,7 @@ public class GatewaySecurity {
     @Bean
     SecurityWebFilterChain security(ServerHttpSecurity http,
                                     UrlBasedCorsConfigurationSource cors,
+                                    AccountGateway accounts, AccountScope scope,
                                     @Value("${app.auth-required}") boolean required,
                                     @Value("${app.username}") String username,
                                     @Value("${app.password}") String password) {
@@ -37,8 +44,16 @@ public class GatewaySecurity {
             }
             var encoder = PasswordEncoderFactories.createDelegatingPasswordEncoder();
             var user = User.withUsername(username).password(encoder.encode(password)).roles("FITFORGE").build();
-            http.authenticationManager(new org.springframework.security.authentication.UserDetailsRepositoryReactiveAuthenticationManager(
-                    new MapReactiveUserDetailsService(user)));
+            var demo = new UserDetailsRepositoryReactiveAuthenticationManager(new MapReactiveUserDetailsService(user));
+            http.authenticationManager(credentials -> {
+                String login = credentials.getName();
+                if (scope.isDemo(login)) return demo.authenticate(credentials);
+                return accounts.authenticate(login, credentials.getCredentials().toString())
+                        .flatMap(authenticated -> authenticated
+                                ? Mono.just(UsernamePasswordAuthenticationToken.authenticated(login.toLowerCase(Locale.ROOT),
+                                        null, List.of(new SimpleGrantedAuthority("ROLE_FITFORGE"))))
+                                : Mono.error(new BadCredentialsException("Credenciais inválidas.")));
+            });
             http.httpBasic(Customizer.withDefaults());
         } else {
             http.httpBasic(ServerHttpSecurity.HttpBasicSpec::disable);
@@ -46,6 +61,7 @@ public class GatewaySecurity {
         http.authorizeExchange(routes -> {
             routes.pathMatchers(HttpMethod.OPTIONS, "/**").permitAll();
             if (required) {
+                routes.pathMatchers(HttpMethod.POST, "/api/auth/register").permitAll();
                 routes.pathMatchers("/api/**").hasRole("FITFORGE");
                 routes.pathMatchers("/", "/index.html", "/actuator/health", "/swagger-ui.html", "/swagger-ui/**",
                         "/webjars/**", "/v3/api-docs", "/v3/api-docs/**").permitAll();
