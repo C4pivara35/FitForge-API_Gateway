@@ -7,5 +7,5 @@
 
 ## Trabalho
 
-FitForge — API Gateway e BFF (Spring Cloud Gateway) para os microsserviços do FitForge.
-Atividade Formativa 16 — Arquitetura de Soluções Computacionais.
+FitForge — Projeto Arquitetura Completa — Cloud.
+Microfrontend, Gateway/BFF, microsserviços, bancos independentes e Azure Service Bus.

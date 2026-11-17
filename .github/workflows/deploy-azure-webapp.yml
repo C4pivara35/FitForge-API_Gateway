@@ -3,6 +3,10 @@ name: Deploy FitForge Gateway & BFF
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'README.md'
+      - 'GRUPO.md'
+      - 'docs/**'
   workflow_dispatch:
 
 jobs:

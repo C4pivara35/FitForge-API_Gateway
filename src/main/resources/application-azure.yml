@@ -1,0 +1,18 @@
+services:
+  treinos:
+    url: ${TREINOS_SERVICE_URL}
+  progresso:
+    url: ${PROGRESSO_SERVICE_URL}
+
+app:
+  auth-required: true
+  username: "${FITFORGE_USERNAME}"
+  password: "${FITFORGE_PASSWORD}"
+  internal-key: "${FITFORGE_INTERNAL_KEY}"
+  cors-origins: "${CORS_ORIGINS}"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
