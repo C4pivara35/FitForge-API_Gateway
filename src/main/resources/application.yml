@@ -1,0 +1,97 @@
+# =====================================================================
+#  FitForge — API Gateway & BFF (Atividade 16)
+#  Ponto único de entrada para os Microfrontends (camada de interface
+#  do backend). Todos os endereços vêm de variáveis de ambiente, que no
+#  Azure são cadastradas em "Configurações do aplicativo" (App settings).
+# =====================================================================
+server:
+  # O Azure Web App informa a porta pela variável PORT (ou usa 80 → mapeado).
+  port: ${PORT:8080}
+
+spring:
+  application:
+    name: fitforge-gateway
+  main:
+    web-application-type: reactive
+
+  cloud:
+    gateway:
+      # ---------------------------------------------------------------
+      # API GATEWAY — Rotas de Proxy Reverso (transparente)
+      # ---------------------------------------------------------------
+      routes:
+        # /api/treinos/**  -> treinos-service (fichas e exercícios)
+        - id: treinos-service-route
+          uri: ${services.treinos.url}
+          predicates:
+            - Path=/api/treinos/**
+          filters:
+            - AddResponseHeader=X-Gateway-Route, treinos-service
+            # Resiliência: repete GETs que falharem por erro transitório (502/503/504)
+            - name: Retry
+              args:
+                retries: 2
+                methods: GET
+                statuses: BAD_GATEWAY, SERVICE_UNAVAILABLE, GATEWAY_TIMEOUT
+
+        # /api/sessoes/**  -> progresso-service (sessões e indicadores)
+        - id: progresso-service-route
+          uri: ${services.progresso.url}
+          predicates:
+            - Path=/api/sessoes/**
+          filters:
+            - AddResponseHeader=X-Gateway-Route, progresso-service
+            - name: Retry
+              args:
+                retries: 2
+                methods: GET
+                statuses: BAD_GATEWAY, SERVICE_UNAVAILABLE, GATEWAY_TIMEOUT
+
+      # Tempo máximo de espera pelos microsserviços (Azure pode ter cold start)
+      httpclient:
+        connect-timeout: 5000
+        response-timeout: 20s
+
+# ---------------------------------------------------------------------
+# Endereços dos microsserviços de domínio (usados pelas rotas e pelo BFF)
+# No Azure: TREINOS_SERVICE_URL e PROGRESSO_SERVICE_URL em App settings.
+# ---------------------------------------------------------------------
+services:
+  treinos:
+    url: ${TREINOS_SERVICE_URL:http://localhost:8081}
+  progresso:
+    url: ${PROGRESSO_SERVICE_URL:http://localhost:8082}
+  timeout-seconds: ${BFF_TIMEOUT_SECONDS:15}
+
+app:
+  cors-origins: "${CORS_ORIGINS:http://localhost:5000,http://127.0.0.1:5000}"
+  auth-required: ${FITFORGE_AUTH_REQUIRED:false}
+  username: "${FITFORGE_USERNAME:fitforge}"
+  password: "${FITFORGE_PASSWORD:}"
+  internal-key: "${FITFORGE_INTERNAL_KEY:}"
+  timezone: ${APP_TIMEZONE:America/Sao_Paulo}
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: method
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway,metrics
+  endpoint:
+    gateway:
+      enabled: true
+    health:
+      show-details: never
+
+logging:
+  level:
+    root: INFO
+    br.fitforge.gateway: INFO
+    org.springframework.cloud.gateway: INFO
